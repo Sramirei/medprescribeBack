@@ -1,0 +1,96 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  admin
+  doctor
+  patient
+}
+
+enum PrescriptionStatus {
+  pending
+  consumed
+}
+
+model User {
+  id        String    @id @default(cuid())
+  email     String    @unique
+  password  String
+  name      String
+  role      Role
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  doctorId  String?
+  patientId String?
+
+  doctor  Doctor?
+  patient Patient?
+
+  refreshToken String?
+
+  @@index([role])
+  @@index([email])
+  @@index([deletedAt])
+}
+
+model Doctor {
+  id        String  @id @default(cuid())
+  userId    String  @unique
+  specialty String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  prescriptions Prescription[] @relation("AuthoredBy")
+}
+
+model Patient {
+  id        String    @id @default(cuid())
+  userId    String    @unique
+  birthDate DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  prescriptions Prescription[]
+}
+
+model Prescription {
+  id         String             @id @default(cuid())
+  code       String             @unique
+  status     PrescriptionStatus @default(pending)
+  notes      String?
+  createdAt  DateTime           @default(now())
+  consumedAt DateTime?
+
+  patientId String
+  authorId  String
+
+  patient Patient @relation(fields: [patientId], references: [id])
+  author  Doctor  @relation("AuthoredBy", fields: [authorId], references: [id])
+
+  items PrescriptionItem[]
+
+  @@index([status, createdAt])
+  @@index([patientId])
+  @@index([authorId])
+}
+
+model PrescriptionItem {
+  id String @id @default(cuid())
+
+  prescriptionId String
+
+  prescription Prescription @relation(fields: [prescriptionId], references: [id], onDelete: Cascade)
+
+  name         String
+  dosage       String?
+  quantity     Int?
+  instructions String?
+}

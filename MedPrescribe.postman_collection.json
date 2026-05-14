@@ -1,0 +1,668 @@
+{
+  "info": {
+    "name": "MedPrescribe API",
+    "description": "Medical prescriptions backend API.\n\n**Setup:**\n1. Importa también `MedPrescribe.postman_environment.json`\n2. Ejecuta cualquier **Login** → tokens se guardan automáticamente\n3. Los demás endpoints los usan sin configuración extra\n\n**Flujo rápido:**\n1. Login (Admin) → Login (Doctor) → Create User (Doctor/Patient)\n2. Login (Doctor) → Create Prescription\n3. Login (Patient) → Consume Prescription / Download PDF",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }]
+  },
+  "item": [
+    {
+      "name": "🔐 Auth",
+      "item": [
+        {
+          "name": "Login (Admin)",
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "const res = pm.response.json();",
+                "if (res.data) {",
+                "  pm.environment.set('accessToken', res.data.accessToken);",
+                "  pm.environment.set('refreshToken', res.data.refreshToken);",
+                "  pm.environment.set('userId', res.data.user.id);",
+                "  console.log('✅ Logged in as admin');",
+                "}"
+              ],
+              "type": "text/javascript"
+            }
+          }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"admin@test.com\",\n  \"password\": \"admin123\"\n}" },
+            "url": { "raw": "{{baseUrl}}/auth/login", "host": ["{{baseUrl}}"], "path": ["auth", "login"] },
+            "description": "Login como admin. Guarda `accessToken`, `refreshToken`, `userId`."
+          }
+        },
+        {
+          "name": "Login (Doctor)",
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "const res = pm.response.json();",
+                "if (res.data) {",
+                "  pm.environment.set('accessToken', res.data.accessToken);",
+                "  pm.environment.set('refreshToken', res.data.refreshToken);",
+                "  pm.environment.set('userId', res.data.user.id);",
+                "  pm.environment.set('doctorId', res.data.user.doctorId);",
+                "  console.log('✅ Doctor logged in. doctorId:', res.data.user.doctorId);",
+                "}"
+              ],
+              "type": "text/javascript"
+            }
+          }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"dr@test.com\",\n  \"password\": \"dr123\"\n}" },
+            "url": { "raw": "{{baseUrl}}/auth/login", "host": ["{{baseUrl}}"], "path": ["auth", "login"] }
+          }
+        },
+        {
+          "name": "Login (Patient)",
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "const res = pm.response.json();",
+                "if (res.data) {",
+                "  pm.environment.set('accessToken', res.data.accessToken);",
+                "  pm.environment.set('refreshToken', res.data.refreshToken);",
+                "  pm.environment.set('userId', res.data.user.id);",
+                "  pm.environment.set('patientId', res.data.user.patientId);",
+                "  console.log('✅ Patient logged in. patientId:', res.data.user.patientId);",
+                "}"
+              ],
+              "type": "text/javascript"
+            }
+          }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"patient@test.com\",\n  \"password\": \"patient123\"\n}" },
+            "url": { "raw": "{{baseUrl}}/auth/login", "host": ["{{baseUrl}}"], "path": ["auth", "login"] }
+          }
+        },
+        {
+          "name": "Refresh Token",
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "const res = pm.response.json();",
+                "if (res.data) {",
+                "  pm.environment.set('accessToken', res.data.accessToken);",
+                "  pm.environment.set('refreshToken', res.data.refreshToken);",
+                "  console.log('✅ Tokens rotated');",
+                "}"
+              ],
+              "type": "text/javascript"
+            }
+          }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}" },
+            "url": { "raw": "{{baseUrl}}/auth/refresh", "host": ["{{baseUrl}}"], "path": ["auth", "refresh"] },
+            "description": "Rota el refresh token. El anterior queda invalidado inmediatamente."
+          }
+        },
+        {
+          "name": "Get Profile",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/auth/profile", "host": ["{{baseUrl}}"], "path": ["auth", "profile"] },
+            "description": "Devuelve el payload del JWT actual (sub, email, role, doctorId, patientId)."
+          }
+        },
+        {
+          "name": "Logout",
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "pm.environment.unset('accessToken');",
+                "pm.environment.unset('refreshToken');",
+                "console.log('✅ Logged out, tokens cleared');"
+              ],
+              "type": "text/javascript"
+            }
+          }],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/auth/logout", "host": ["{{baseUrl}}"], "path": ["auth", "logout"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "👤 Users (Admin only)",
+      "description": "Todos los endpoints requieren rol **admin**.",
+      "item": [
+        {
+          "name": "List Users",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/users?page=1&limit=10&order=desc&orderBy=createdAt",
+              "host": ["{{baseUrl}}"],
+              "path": ["users"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "10" },
+                { "key": "order", "value": "desc" },
+                { "key": "orderBy", "value": "createdAt" },
+                { "key": "role", "value": "doctor", "disabled": true },
+                { "key": "query", "value": "john", "disabled": true }
+              ]
+            },
+            "description": "Filtros disponibles:\n- `query` → busca por nombre o email (case-insensitive)\n- `role` → filtra por admin | doctor | patient\n- `orderBy` → createdAt | name | email | role\n- `order` → asc | desc\n- `page` / `limit` → paginación"
+          }
+        },
+        {
+          "name": "List Users - Filter by Role",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/users?role=doctor&page=1&limit=10",
+              "host": ["{{baseUrl}}"],
+              "path": ["users"],
+              "query": [
+                { "key": "role", "value": "doctor" },
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "10" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "List Users - Search by Name/Email",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/users?query=john&page=1&limit=10",
+              "host": ["{{baseUrl}}"],
+              "path": ["users"],
+              "query": [
+                { "key": "query", "value": "john" },
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "10" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get User by ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/users/{{userId}}", "host": ["{{baseUrl}}"], "path": ["users", "{{userId}}"] }
+          }
+        },
+        {
+          "name": "Create User (Admin)",
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "const res = pm.response.json();",
+                "if (res.data && res.data.id) {",
+                "  pm.environment.set('newUserId', res.data.id);",
+                "  console.log('✅ User created:', res.data.id);",
+                "}"
+              ],
+              "type": "text/javascript"
+            }
+          }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"New Admin\",\n  \"email\": \"newadmin@test.com\",\n  \"password\": \"password123\",\n  \"role\": \"admin\"\n}" },
+            "url": { "raw": "{{baseUrl}}/users", "host": ["{{baseUrl}}"], "path": ["users"] },
+            "description": "Crea un usuario con rol admin. No genera perfil Doctor/Patient."
+          }
+        },
+        {
+          "name": "Create User (Doctor)",
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "const res = pm.response.json();",
+                "if (res.data && res.data.id) {",
+                "  pm.environment.set('newUserId', res.data.id);",
+                "  pm.environment.set('newDoctorId', res.data.doctorId);",
+                "  console.log('✅ Doctor created. doctorId:', res.data.doctorId);",
+                "}"
+              ],
+              "type": "text/javascript"
+            }
+          }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"Dr. New Doctor\",\n  \"email\": \"newdoctor@test.com\",\n  \"password\": \"password123\",\n  \"role\": \"doctor\",\n  \"specialty\": \"Cardiology\"\n}" },
+            "url": { "raw": "{{baseUrl}}/users", "host": ["{{baseUrl}}"], "path": ["users"] },
+            "description": "Crea usuario + registro Doctor automáticamente. `specialty` es opcional."
+          }
+        },
+        {
+          "name": "Create User (Patient)",
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "const res = pm.response.json();",
+                "if (res.data && res.data.id) {",
+                "  pm.environment.set('newUserId', res.data.id);",
+                "  pm.environment.set('newPatientId', res.data.patientId);",
+                "  console.log('✅ Patient created. patientId:', res.data.patientId);",
+                "}"
+              ],
+              "type": "text/javascript"
+            }
+          }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"New Patient\",\n  \"email\": \"newpatient@test.com\",\n  \"password\": \"password123\",\n  \"role\": \"patient\",\n  \"birthDate\": \"1995-03-20\"\n}" },
+            "url": { "raw": "{{baseUrl}}/users", "host": ["{{baseUrl}}"], "path": ["users"] },
+            "description": "Crea usuario + registro Patient automáticamente. `birthDate` es opcional."
+          }
+        },
+        {
+          "name": "Update User - Name/Email",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"Updated Name\",\n  \"email\": \"updated@test.com\"\n}" },
+            "url": { "raw": "{{baseUrl}}/users/{{newUserId}}", "host": ["{{baseUrl}}"], "path": ["users", "{{newUserId}}"] }
+          }
+        },
+        {
+          "name": "Update User - Change Role (doctor → patient)",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"role\": \"patient\",\n  \"birthDate\": \"1990-01-01\"\n}" },
+            "url": { "raw": "{{baseUrl}}/users/{{newUserId}}", "host": ["{{baseUrl}}"], "path": ["users", "{{newUserId}}"] },
+            "description": "Cambia el role del usuario. El servicio:\n1. Elimina el registro Doctor anterior\n2. Crea el registro Patient nuevo\n3. Actualiza doctorId/patientId en User\n\n⚠️ Si el patient tiene prescripciones existentes → **400 Bad Request**"
+          }
+        },
+        {
+          "name": "Delete User (Soft)",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/users/{{newUserId}}", "host": ["{{baseUrl}}"], "path": ["users", "{{newUserId}}"] },
+            "description": "Soft delete: setea `deletedAt`. El usuario no aparece en listados.\n\n⚠️ **403** si intentas eliminarte a ti mismo\n⚠️ **400** si es el último admin"
+          }
+        },
+        {
+          "name": "Reset Password",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"newPassword\": \"newSecurePassword123\"\n}" },
+            "url": {
+              "raw": "{{baseUrl}}/users/{{newUserId}}/reset-password",
+              "host": ["{{baseUrl}}"],
+              "path": ["users", "{{newUserId}}", "reset-password"]
+            },
+            "description": "Hashea la nueva contraseña e invalida el refresh token activo del usuario."
+          }
+        }
+      ]
+    },
+    {
+      "name": "👨‍⚕️ Doctors",
+      "item": [
+        {
+          "name": "List Doctors",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/doctors?page=1&limit=10&order=desc",
+              "host": ["{{baseUrl}}"],
+              "path": ["doctors"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "10" },
+                { "key": "order", "value": "desc" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Doctor by ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/doctors/{{doctorId}}", "host": ["{{baseUrl}}"], "path": ["doctors", "{{doctorId}}"] }
+          }
+        },
+        {
+          "name": "Update Doctor Specialty",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"specialty\": \"Neurology\"\n}" },
+            "url": { "raw": "{{baseUrl}}/doctors/{{doctorId}}", "host": ["{{baseUrl}}"], "path": ["doctors", "{{doctorId}}"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "🧑 Patients",
+      "item": [
+        {
+          "name": "List Patients",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/patients?page=1&limit=10",
+              "host": ["{{baseUrl}}"],
+              "path": ["patients"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "10" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Patient by ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/patients/{{patientId}}", "host": ["{{baseUrl}}"], "path": ["patients", "{{patientId}}"] }
+          }
+        },
+        {
+          "name": "Update Patient",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"birthDate\": \"1992-08-10\"\n}" },
+            "url": { "raw": "{{baseUrl}}/patients/{{patientId}}", "host": ["{{baseUrl}}"], "path": ["patients", "{{patientId}}"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "💊 Prescriptions",
+      "item": [
+        {
+          "name": "Create Prescription",
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "const res = pm.response.json();",
+                "if (res.data && res.data.id) {",
+                "  pm.environment.set('prescriptionId', res.data.id);",
+                "  console.log('✅ Prescription created:', res.data.code);",
+                "}"
+              ],
+              "type": "text/javascript"
+            }
+          }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"patientId\": \"{{patientId}}\",\n  \"notes\": \"Patient has penicillin allergy. Monitor closely.\",\n  \"items\": [\n    {\n      \"name\": \"Amoxicillin\",\n      \"dosage\": \"500mg\",\n      \"quantity\": 21,\n      \"instructions\": \"Take 3 times a day with food\"\n    },\n    {\n      \"name\": \"Ibuprofen\",\n      \"dosage\": \"400mg\",\n      \"quantity\": 10,\n      \"instructions\": \"Take every 8 hours as needed for pain\"\n    }\n  ]\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/prescriptions", "host": ["{{baseUrl}}"], "path": ["prescriptions"] },
+            "description": "⚠️ Requiere login como **doctor** primero.\n\nUsa `{{patientId}}` del environment (se llena al hacer Login como Patient)."
+          }
+        },
+        {
+          "name": "List Prescriptions (all filters off)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/prescriptions?page=1&limit=10&order=desc",
+              "host": ["{{baseUrl}}"],
+              "path": ["prescriptions"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "10" },
+                { "key": "order", "value": "desc" },
+                { "key": "status", "value": "pending", "disabled": true },
+                { "key": "from", "value": "2024-01-01", "disabled": true },
+                { "key": "to", "value": "2024-12-31", "disabled": true }
+              ]
+            },
+            "description": "Filtrado automático por rol:\n- **admin** → ve todas\n- **doctor** → solo las suyas\n- **patient** → solo las suyas\n\nFiltros opcionales (actívalos según necesites): `status`, `from`, `to`"
+          }
+        },
+        {
+          "name": "List Prescriptions - Pending only",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/prescriptions?status=pending&page=1&limit=10",
+              "host": ["{{baseUrl}}"],
+              "path": ["prescriptions"],
+              "query": [
+                { "key": "status", "value": "pending" },
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "10" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "List Prescriptions - Consumed only",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/prescriptions?status=consumed&page=1&limit=10",
+              "host": ["{{baseUrl}}"],
+              "path": ["prescriptions"],
+              "query": [
+                { "key": "status", "value": "consumed" },
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "10" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "List Prescriptions - Date Range",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/prescriptions?from=2024-01-01&to=2026-12-31",
+              "host": ["{{baseUrl}}"],
+              "path": ["prescriptions"],
+              "query": [
+                { "key": "from", "value": "2024-01-01" },
+                { "key": "to", "value": "2026-12-31" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Prescription by ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/prescriptions/{{prescriptionId}}", "host": ["{{baseUrl}}"], "path": ["prescriptions", "{{prescriptionId}}"] }
+          }
+        },
+        {
+          "name": "Consume Prescription",
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "const res = pm.response.json();",
+                "if (res.data) {",
+                "  console.log('✅ Status:', res.data.status, '| consumedAt:', res.data.consumedAt);",
+                "}"
+              ],
+              "type": "text/javascript"
+            }
+          }],
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/prescriptions/{{prescriptionId}}/consume",
+              "host": ["{{baseUrl}}"],
+              "path": ["prescriptions", "{{prescriptionId}}", "consume"]
+            },
+            "description": "⚠️ Requiere login como **patient** o **admin**.\n\nSi ya está consumida → **400 Bad Request**"
+          }
+        },
+        {
+          "name": "Download PDF",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/prescriptions/{{prescriptionId}}/pdf",
+              "host": ["{{baseUrl}}"],
+              "path": ["prescriptions", "{{prescriptionId}}", "pdf"]
+            },
+            "description": "Descarga el PDF. En Postman: **Send and Download** para guardarlo como archivo."
+          }
+        }
+      ]
+    },
+    {
+      "name": "📊 Admin",
+      "item": [
+        {
+          "name": "Get Metrics",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/admin/metrics", "host": ["{{baseUrl}}"], "path": ["admin", "metrics"] },
+            "description": "⚠️ Solo rol **admin**.\n\nDevuelve: totales, byStatus (pending/consumed), prescripciones por día (últimos 30d), top 5 doctores."
+          },
+          "response": [{
+            "name": "200 OK - Example",
+            "status": "OK",
+            "code": 200,
+            "body": "{\n  \"data\": {\n    \"totals\": { \"doctors\": 1, \"patients\": 1, \"prescriptions\": 10 },\n    \"byStatus\": { \"pending\": 5, \"consumed\": 5 },\n    \"byDay\": [{ \"day\": \"2026-05-13\", \"count\": 10 }],\n    \"topDoctors\": [{ \"id\": \"clxxx\", \"name\": \"Dr. John Smith\", \"email\": \"dr@test.com\", \"specialty\": \"General Medicine\", \"prescriptionsCount\": 10 }]\n  },\n  \"timestamp\": \"2026-05-13T00:00:00.000Z\"\n}"
+          }]
+        }
+      ]
+    },
+    {
+      "name": "❌ Error Cases",
+      "description": "Casos para verificar que los errores se manejan correctamente.",
+      "item": [
+        {
+          "name": "Login - Wrong Password (401)",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"admin@test.com\",\n  \"password\": \"wrongpassword\"\n}" },
+            "url": { "raw": "{{baseUrl}}/auth/login", "host": ["{{baseUrl}}"], "path": ["auth", "login"] }
+          }
+        },
+        {
+          "name": "No token → 401",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/admin/metrics", "host": ["{{baseUrl}}"], "path": ["admin", "metrics"] }
+          }
+        },
+        {
+          "name": "Patient accede a Admin metrics → 403",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/admin/metrics", "host": ["{{baseUrl}}"], "path": ["admin", "metrics"] },
+            "description": "Login como patient primero → ejecuta → 403 Forbidden"
+          }
+        },
+        {
+          "name": "Patient crea prescripción → 403",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"patientId\": \"some-id\",\n  \"items\": [{ \"name\": \"Aspirin\" }]\n}" },
+            "url": { "raw": "{{baseUrl}}/prescriptions", "host": ["{{baseUrl}}"], "path": ["prescriptions"] },
+            "description": "Login como patient → crear prescripción → 403"
+          }
+        },
+        {
+          "name": "Validación body inválido → 400",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"not-an-email\",\n  \"password\": \"\"\n}" },
+            "url": { "raw": "{{baseUrl}}/auth/login", "host": ["{{baseUrl}}"], "path": ["auth", "login"] },
+            "description": "Espera `{ message, code: 'BAD_REQUEST', details: [...] }`"
+          }
+        },
+        {
+          "name": "Email duplicado → 409",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"Duplicate\",\n  \"email\": \"admin@test.com\",\n  \"password\": \"123456\",\n  \"role\": \"admin\"\n}" },
+            "url": { "raw": "{{baseUrl}}/users", "host": ["{{baseUrl}}"], "path": ["users"] },
+            "description": "Login como admin primero → intenta crear con email existente → 409 Conflict"
+          }
+        },
+        {
+          "name": "Consumir prescripción ya consumida → 400",
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/prescriptions/{{prescriptionId}}/consume",
+              "host": ["{{baseUrl}}"],
+              "path": ["prescriptions", "{{prescriptionId}}", "consume"]
+            },
+            "description": "Consume primero la prescripción, luego ejecuta de nuevo → 400 Bad Request"
+          }
+        },
+        {
+          "name": "Borrar último admin → 400",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/users/{{userId}}", "host": ["{{baseUrl}}"], "path": ["users", "{{userId}}"] },
+            "description": "Si solo hay un admin en la DB → 400 Bad Request"
+          }
+        },
+        {
+          "name": "Auto-eliminarse → 403",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/users/{{userId}}", "host": ["{{baseUrl}}"], "path": ["users", "{{userId}}"] },
+            "description": "El userId del token coincide con el parámetro → 403 Forbidden"
+          }
+        }
+      ]
+    }
+  ]
+}

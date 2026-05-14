@@ -1,0 +1,51 @@
+version: '3.9'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: medprescribe_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: medprescribe
+    ports:
+      - '5432:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres']
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: .
+      target: development
+    container_name: medprescribe_api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PORT: 9000
+      NODE_ENV: development
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/medprescribe?schema=public
+      JWT_ACCESS_SECRET: oZ63JAuwVHRAYNh7MxRHFOERND3RNNCu4FeYSLXuDyZ
+      JWT_REFRESH_SECRET: XfbLTKGDkaMDU7rald0y14ValVcmAdda8FOL86gdUeQ
+      JWT_ACCESS_TTL: 15m
+      JWT_REFRESH_TTL: 7d
+    ports:
+      - '9000:9000'
+    volumes:
+      - .:/app
+      - /app/node_modules
+    command: >
+      sh -c "npx prisma migrate deploy &&
+             npx prisma generate &&
+             npx ts-node prisma/seed.ts &&
+             npm run start:dev"
+
+volumes:
+  postgres_data:
